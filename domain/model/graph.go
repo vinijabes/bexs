@@ -1,20 +1,30 @@
 package model
 
+import (
+	"bexs/domain/exceptions"
+)
+
 type VertexID string
 
-type Edge struct {
+type Route struct {
+	Origin VertexID
+	Dest   VertexID
+	Price  uint64
+}
+
+type GraphEdge struct {
 	Origin int
 	Dest   int
 	Price  uint64
 }
 
-type Vertex struct {
+type GraphVertex struct {
 	ID    VertexID
-	Edges []Edge
+	Edges []GraphEdge
 }
 
 type Graph struct {
-	Vertexes        []Vertex
+	Vertexes        []GraphVertex
 	VertexReference map[VertexID]int
 }
 
@@ -34,14 +44,52 @@ func (g Graph) minDistance(dist []int, set []bool) int {
 	return minIndex
 }
 
-func (g Graph) CalculatePath(start VertexID, end VertexID) ([]Vertex, int, error) {
-	var vertexes []Vertex = []Vertex{}
+func (g *Graph) AddRoute(edge Route) {
+	if _, exists := g.VertexReference[edge.Origin]; !exists {
+		g.Vertexes = append(g.Vertexes, GraphVertex{
+			ID: edge.Origin,
+		})
+
+		g.VertexReference[edge.Origin] = len(g.Vertexes) - 1
+	}
+
+	if _, exists := g.VertexReference[edge.Dest]; !exists {
+		g.Vertexes = append(g.Vertexes, GraphVertex{
+			ID: edge.Dest,
+		})
+
+		g.VertexReference[edge.Dest] = len(g.Vertexes) - 1
+	}
+
+	originVertexIndex := g.VertexReference[edge.Origin]
+
+	graphEdge := GraphEdge{
+		Origin: originVertexIndex,
+		Dest:   g.VertexReference[edge.Dest],
+		Price:  edge.Price,
+	}
+
+	g.Vertexes[originVertexIndex].Edges = append(g.Vertexes[originVertexIndex].Edges, graphEdge)
+}
+
+func (g Graph) CalculatePath(start VertexID, end VertexID) ([]GraphVertex, int, error) {
+	var vertexes []GraphVertex = []GraphVertex{}
 
 	var vertexCount = len(g.Vertexes)
 	var invalidIndex = int(vertexCount + 1)
 
-	var startIndex = g.VertexReference[start]
-	var endIndex = g.VertexReference[end]
+	var startIndex, endIndex int
+	var ok bool
+
+	startIndex, ok = g.VertexReference[start]
+	if !ok {
+		return nil, 0, exceptions.ErrVertexNotFound
+	}
+
+	endIndex, ok = g.VertexReference[end]
+	if !ok {
+		return nil, 0, exceptions.ErrVertexNotFound
+	}
 
 	var set []bool = make([]bool, vertexCount)
 	var dist []int = make([]int, vertexCount)
@@ -78,9 +126,20 @@ func (g Graph) CalculatePath(start VertexID, end VertexID) ([]Vertex, int, error
 		index = prev[index]
 	}
 
+	if vertexes[len(vertexes)-1].ID != start {
+		return nil, 0, exceptions.ErrPathNotFound
+	}
+
 	for i, j := 0, len(vertexes)-1; i < j; i, j = i+1, j-1 {
 		vertexes[i], vertexes[j] = vertexes[j], vertexes[i]
 	}
 
 	return vertexes, dist[endIndex], nil
+}
+
+func NewGraph() *Graph {
+	return &Graph{
+		Vertexes:        []GraphVertex{},
+		VertexReference: make(map[VertexID]int),
+	}
 }
