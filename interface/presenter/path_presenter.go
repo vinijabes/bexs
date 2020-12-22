@@ -1,7 +1,11 @@
 package presenter
 
-import "io"
+import (
+	"bexs/domain/model"
+	"io"
+)
 
 type PathPresenter interface {
-	ShowPath(io.Writer) error
+	ShowPath([]model.GraphVertex, int, io.Writer) error
+	ShowException(error, io.Writer) error
 }
