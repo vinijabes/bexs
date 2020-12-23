@@ -80,6 +80,13 @@ Com isto, um executável sera gerado na pasta dist, podendo ele ser executado co
 ./dist/service input-routes.csv
 ```
 
+Opcionalmente você pode ativar o recurso de cache setando o environment USE_CACHE para diferente de false, também é possível alterar a porta da API Rest com o environment PORT:
+
+```sh
+export USE_CACHE=true  (default: false)
+export PORT=8080       (default: 8080)
+```
+
 Obs: Se o arquivo de entrada não existir, ele será criado em branco.
 
 ### Testes
