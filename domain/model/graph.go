@@ -6,6 +6,12 @@ import (
 
 type VertexID string
 
+type Path struct {
+	Connections []VertexID
+	SegmentDist []uint64
+	Dist        uint64
+}
+
 type Route struct {
 	Origin VertexID
 	Dest   VertexID
@@ -44,7 +50,7 @@ func (g Graph) minDistance(dist []int, set []bool) int {
 	return minIndex
 }
 
-func (g *Graph) AddRoute(edge Route) {
+func (g *Graph) AddRoute(edge Route) bool {
 	if _, exists := g.VertexReference[edge.Origin]; !exists {
 		g.Vertexes = append(g.Vertexes, GraphVertex{
 			ID: edge.Origin,
@@ -69,11 +75,19 @@ func (g *Graph) AddRoute(edge Route) {
 		Price:  edge.Price,
 	}
 
+	for _, edge := range g.Vertexes[originVertexIndex].Edges {
+		if edge.Dest == graphEdge.Dest && edge.Price == graphEdge.Price {
+			return false
+		}
+	}
+
 	g.Vertexes[originVertexIndex].Edges = append(g.Vertexes[originVertexIndex].Edges, graphEdge)
+	return true
 }
 
-func (g Graph) CalculatePath(start VertexID, end VertexID) ([]GraphVertex, int, error) {
-	var vertexes []GraphVertex = []GraphVertex{}
+func (g Graph) CalculatePath(start VertexID, end VertexID) (*Path, error) {
+	var vertexes []VertexID = []VertexID{}
+	var resultDist []uint64 = []uint64{}
 
 	var vertexCount = len(g.Vertexes)
 	var invalidIndex = int(vertexCount + 1)
@@ -83,12 +97,12 @@ func (g Graph) CalculatePath(start VertexID, end VertexID) ([]GraphVertex, int, 
 
 	startIndex, ok = g.VertexReference[start]
 	if !ok {
-		return nil, 0, exceptions.ErrVertexNotFound
+		return nil, exceptions.ErrVertexNotFound
 	}
 
 	endIndex, ok = g.VertexReference[end]
 	if !ok {
-		return nil, 0, exceptions.ErrVertexNotFound
+		return nil, exceptions.ErrVertexNotFound
 	}
 
 	var set []bool = make([]bool, vertexCount)
@@ -122,19 +136,21 @@ func (g Graph) CalculatePath(start VertexID, end VertexID) ([]GraphVertex, int, 
 
 	var index int = endIndex
 	for index != invalidIndex {
-		vertexes = append(vertexes, g.Vertexes[index])
+		vertexes = append(vertexes, g.Vertexes[index].ID)
+		resultDist = append(resultDist, uint64(dist[index]))
 		index = prev[index]
 	}
 
-	if vertexes[len(vertexes)-1].ID != start {
-		return nil, 0, exceptions.ErrPathNotFound
+	if vertexes[len(vertexes)-1] != start {
+		return nil, exceptions.ErrPathNotFound
 	}
 
 	for i, j := 0, len(vertexes)-1; i < j; i, j = i+1, j-1 {
 		vertexes[i], vertexes[j] = vertexes[j], vertexes[i]
+		resultDist[i], resultDist[j] = resultDist[j], resultDist[i]
 	}
 
-	return vertexes, dist[endIndex], nil
+	return &Path{Connections: vertexes, Dist: uint64(dist[endIndex]), SegmentDist: resultDist}, nil
 }
 
 func NewGraph() *Graph {
