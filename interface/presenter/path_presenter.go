@@ -6,6 +6,6 @@ import (
 )
 
 type PathPresenter interface {
-	ShowPath([]model.GraphVertex, int, io.Writer) error
+	ShowPath(model.Path, io.Writer) error
 	ShowException(error, io.Writer) error
 }
