@@ -1,6 +1,7 @@
 package file
 
 import (
+	"bexs/domain/exceptions"
 	"bexs/domain/model"
 	"bexs/interface/repository"
 	"encoding/csv"
@@ -9,20 +10,22 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type filePathRepository struct {
-	filepath string
-	file     *os.File
+	buffer io.ReadWriteSeeker
+
+	mu sync.Mutex
 }
 
 func (fpr *filePathRepository) GetGraph() (model.Graph, error) {
-	file, err := os.Open(fpr.filepath)
-	if err != nil {
-		return model.Graph{}, err
-	}
+	fpr.mu.Lock()
+	defer fpr.mu.Unlock()
 
-	r := csv.NewReader(file)
+	fpr.buffer.Seek(0, io.SeekStart)
+	r := csv.NewReader(fpr.buffer)
+
 	graph := model.NewGraph()
 
 	for {
@@ -32,12 +35,12 @@ func (fpr *filePathRepository) GetGraph() (model.Graph, error) {
 		}
 
 		if err != nil {
-			return model.Graph{}, err
+			return model.Graph{}, exceptions.ErrInvalidInputFile
 		}
 
 		price, err := strconv.ParseUint(record[2], 10, 64)
 		if err != nil {
-			return model.Graph{}, err
+			return model.Graph{}, exceptions.ErrInvalidInputFile
 		}
 
 		origin := model.VertexID(record[0])
@@ -54,17 +57,35 @@ func (fpr *filePathRepository) GetGraph() (model.Graph, error) {
 }
 
 func (fpr *filePathRepository) AddRoute(route model.Route) error {
-	file, err := os.OpenFile(fpr.filepath, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	fpr.mu.Lock()
+	defer fpr.mu.Unlock()
+
+	pos, err := fpr.buffer.Seek(0, io.SeekEnd)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.WriteString(fmt.Sprintf("\n%s", strings.Join([]string{string(route.Origin), string(route.Dest), strconv.FormatUint(route.Price, 10)}, ",")))
+	routeData := strings.Join([]string{string(route.Origin), string(route.Dest), strconv.FormatUint(route.Price, 10)}, ",")
+
+	if pos > 0 {
+		_, err = fpr.buffer.Write([]byte(fmt.Sprintf("\n%s", routeData)))
+	} else {
+		_, err = fpr.buffer.Write([]byte(routeData))
+	}
 	return err
 }
 
 func NewFilePathRepository(filepath string) (repository.PathRepository, error) {
+	file, err := os.OpenFile(filepath, os.O_CREATE|os.O_RDWR, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewBufferPathRepository(file)
+}
+
+func NewBufferPathRepository(buffer io.ReadWriteSeeker) (repository.PathRepository, error) {
 	return &filePathRepository{
-		filepath: filepath,
+		buffer: buffer,
 	}, nil
 }

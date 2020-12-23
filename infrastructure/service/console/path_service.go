@@ -17,7 +17,8 @@ type consoleService struct {
 	interactor interactor.PathInteractor
 	presenter  presenter.PathPresenter
 
-	done chan struct{}
+	done  chan struct{}
+	input chan string
 }
 
 func (cs *consoleService) Start(context context.Context) <-chan struct{} {
@@ -29,29 +30,31 @@ func (cs *consoleService) Start(context context.Context) <-chan struct{} {
 	return done
 }
 
-func (cs *consoleService) run(context context.Context) {
+func (cs *consoleService) readInput() {
 	reader := bufio.NewReader(os.Stdin)
 
+	fmt.Print("please enter the route: ")
+	input, err := reader.ReadString('\n')
+	if err == io.EOF {
+		close(cs.input)
+		return
+	}
+
+	cs.input <- input
+}
+
+func (cs *consoleService) run(context context.Context) {
 	defer func() {
 		cs.done <- struct{}{}
 	}()
 
 	for {
+		go cs.readInput()
+
 		select {
 		case <-context.Done():
 			return
-		default:
-			fmt.Print("please enter the route: ")
-			input, err := reader.ReadString('\n')
-			if err == io.EOF {
-				return
-			}
-
-			if err != nil {
-				cs.presenter.ShowException(err, os.Stdout)
-				continue
-			}
-
+		case input := <-cs.input:
 			input = strings.Replace(input, "\n", "", -1)
 			input = strings.Replace(input, "\r", "", -1)
 			segments := strings.Split(input, "-")
@@ -63,7 +66,7 @@ func (cs *consoleService) run(context context.Context) {
 
 			origin, dest := segments[0], segments[1]
 
-			path, price, err := cs.interactor.FindPath(interactor.FindPathRequest{
+			path, err := cs.interactor.FindPath(interactor.FindPathRequest{
 				Origin: origin,
 				Dest:   dest,
 			})
@@ -73,7 +76,7 @@ func (cs *consoleService) run(context context.Context) {
 				continue
 			}
 
-			cs.presenter.ShowPath(path, price, os.Stdout)
+			cs.presenter.ShowPath(path, os.Stdout)
 		}
 	}
 }
@@ -82,5 +85,6 @@ func NewConsoleService(interactor interactor.PathInteractor, presenter presenter
 	return &consoleService{
 		interactor: interactor,
 		presenter:  presenter,
+		input:      make(chan string),
 	}
 }

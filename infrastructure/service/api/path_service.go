@@ -6,7 +6,9 @@ import (
 	"bexs/interface/presenter"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -29,30 +31,30 @@ func (rs *restService) Start(context context.Context) <-chan struct{} {
 
 func (rs *restService) run(ctx context.Context) {
 	router := http.NewServeMux()
-	router.HandleFunc("/path", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
+	router.HandleFunc("/v1/path", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
 		var req interactor.FindPathRequest
 
-		err := json.NewDecoder(r.Body).Decode(&req)
+		values := r.URL.Query()
+
+		req.Origin = values.Get("origin")
+		req.Dest = values.Get("destination")
+
+		path, err := rs.interactor.FindPath(req)
 		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			rs.presenter.ShowException(err, w)
 			return
 		}
 
-		path, price, err := rs.interactor.FindPath(req)
-		if err != nil {
-			rs.presenter.ShowException(err, w)
-			return
-		}
-
-		rs.presenter.ShowPath(path, price, w)
+		rs.presenter.ShowPath(path, w)
 	})
 
-	router.HandleFunc("/route", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/v1/route", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -62,16 +64,30 @@ func (rs *restService) run(ctx context.Context) {
 
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			rs.presenter.ShowException(err, w)
 			return
 		}
 
-		rs.interactor.AddRoute(req)
+		err = rs.interactor.AddRoute(req)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			rs.presenter.ShowException(err, w)
+			return
+		}
+
 		w.WriteHeader(200)
 	})
 
+	port, portExists := os.LookupEnv("PORT")
+	if !portExists {
+		port = ":8080"
+	} else {
+		port = fmt.Sprintf(":%s", port)
+	}
+
 	rs.server = http.Server{
-		Addr:    ":8080",
+		Addr:    port,
 		Handler: router,
 	}
 
@@ -86,7 +102,11 @@ func (rs *restService) run(ctx context.Context) {
 		rs.done <- struct{}{}
 	}()
 
-	rs.server.ListenAndServe()
+	fmt.Printf("REST API listening on %s\n", port)
+	err := rs.server.ListenAndServe()
+	if err != http.ErrServerClosed {
+		panic(err)
+	}
 }
 
 func NewRestService(interactor interactor.PathInteractor, presenter presenter.PathPresenter) service.Service {

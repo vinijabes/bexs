@@ -11,7 +11,7 @@ type jsonPathPresenter struct {
 }
 
 type PathResponse struct {
-	Vertexes []string `json:"vertexes"`
+	Vertexes []string `json:"connections"`
 	Price    int      `json:"price"`
 }
 
@@ -19,17 +19,17 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
-func (jp *jsonPathPresenter) ShowPath(path []model.GraphVertex, price int, writer io.Writer) error {
+func (jp *jsonPathPresenter) ShowPath(path model.Path, writer io.Writer) error {
 	resp := PathResponse{}
 
-	var vertexes []string = make([]string, len(path))
+	var vertexes []string = make([]string, len(path.Connections))
 
-	for i := range path {
-		vertexes[i] = string(path[i].ID)
+	for i := range path.Connections {
+		vertexes[i] = string(path.Connections[i])
 	}
 
 	resp.Vertexes = vertexes
-	resp.Price = price
+	resp.Price = int(path.Dist)
 
 	data, err := json.Marshal(resp)
 	if err != nil {

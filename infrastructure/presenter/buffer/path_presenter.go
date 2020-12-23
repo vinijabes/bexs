@@ -11,14 +11,14 @@ import (
 type bufferPathPresenter struct {
 }
 
-func (bp *bufferPathPresenter) ShowPath(path []model.GraphVertex, price int, writer io.Writer) error {
-	var vertexes []string = make([]string, len(path))
+func (bp *bufferPathPresenter) ShowPath(path model.Path, writer io.Writer) error {
+	var vertexes []string = make([]string, len(path.Connections))
 
-	for i := range path {
-		vertexes[i] = string(path[i].ID)
+	for i := range path.Connections {
+		vertexes[i] = string(path.Connections[i])
 	}
 
-	_, err := writer.Write([]byte(fmt.Sprintf("best route: %s > $%d\n", strings.Join(vertexes, " - "), price)))
+	_, err := writer.Write([]byte(fmt.Sprintf("best route: %s > $%d\n", strings.Join(vertexes, " - "), path.Dist)))
 	return err
 }
 
